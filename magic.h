@@ -13,6 +13,9 @@ using namespace std;
 typedef uint8_t Loc;
 
 typedef uint16_t CardType;
+typedef uint8_t SuperType;
+typedef uint8_t CardColor;
+
 
 typedef uint32_t EvergreenKeyword;
 
@@ -75,6 +78,11 @@ const CardType INSTANT (32);
 const CardType SORCERY (64);
 const CardType TOKEN (128);
 
+const SuperType BASIC (1);
+const SuperType LEGENDARY (2);
+const SuperType SNOW (4);
+
+
 enum TurnPhase {
     UntapStep,
     UpkeepStep,
@@ -121,7 +129,8 @@ typedef struct CardTemplate {
     string name;
     CardType type;
     string secondary_type;
-    Color color;
+    SuperType supertype; 
+    CardColor color;
 
     vector<Ability> abilities;
     int owner;
@@ -137,8 +146,9 @@ typedef struct CardTemplate {
 } CardTemplate;
 
 
-typedef struct Card {
 
+typedef struct Card {
+    int card_id;
     int ctempl_id;
     int hp;
     int basic_counters[4];
@@ -186,7 +196,11 @@ CardTemplate new_basic_creature(int strength, int endurance,
 CardTemplate new_basic_land(string name, int owner, int color_id);
 Board board_example();
 
-
 Board * board_ptr();
+
+
+void draw_random_cards(Board * board, int player, int amount);
+
+
 
 
