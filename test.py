@@ -38,6 +38,9 @@ def get_hand(owner):
     lib.print_hand(owner, buffer, BUFFER_SIZE)
     return buffer.value
 
+def action_pass():
+    print("action requested afterwards: ", lib.action_pass())
+
 @dataclass
 class CardTemplate:
     quantity: int
@@ -84,7 +87,7 @@ def get_cardtempl_data(s, quant=False, wid=False):
 dir_path = '/'.join(__file__.split('/')[:-1])
 
 class Card(QWidget):
-    def __init__(self, parent, data: CardTemplate):
+    def __init__(self, parent, data: CardTemplate, place="battlefield"):
         super().__init__(parent)
         uic.loadUi(os.path.join(dir_path, 'card.ui'), self)
         self.show()
@@ -110,19 +113,33 @@ class Card(QWidget):
         self.frame.setPalette(palette)
         self.scrollAreaWidgetContents.setPalette(palette)
 
+        self.place = place
+
 
     def mousePressEvent(self, a0: QtGui.QMouseEvent) -> None:
         super().mousePressEvent(a0)
         self.being_dragged = True
         self.dragged_local_pos = a0.localPos()
 
+        self.frame.setLineWidth(2)
+
+    def mouseReleaseEvent(self, a0):
+        self.frame.setLineWidth(1)
+        if abs(self.pos().y() - 9) > 60 and self.place == "hand":
+            print(222)
+
+        return super().mouseReleaseEvent(a0)
+
     def mouseMoveEvent(self, a0: QtGui.QMouseEvent) -> None:
         super().mouseMoveEvent(a0)
-        
         if self.being_dragged:
             pos2 = a0.localPos()
             v = pos2 - self.dragged_local_pos
             self.move((self.pos() + v).toPoint())
+
+    def mouseDoubleClickEvent(self, a0):
+        print(111)
+        return super().mouseDoubleClickEvent(a0)
 
 class Window(QMainWindow):
     def __init__(self, path=''):
@@ -180,10 +197,12 @@ class Window(QMainWindow):
                     card_str = card_str.decode()
                     card_templ = get_cardtempl_data(card_str, False, True)
                     
-                    widget = Card(self.hands[owner], card_templ)
+                    widget = Card(self.hands[owner], card_templ, "hand")
                     self.hand_cards[owner].append(widget)
                     self.hand_layouts[owner].addWidget(widget)
         #self.library1.insertItem(0, arr.value.decode("utf-8"))
+
+        self.passButton.clicked.connect(action_pass)
 
 def main():
     if len(sys.argv) == 2:

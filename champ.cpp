@@ -8,7 +8,7 @@ extern "C" {
     #include <string>
 
     void init_board() {
-        *board_ptr() = board_example();
+        init_gamestate();
     }
 
     int print_cardtemplate(CardTemplate * ct, char * buffer, int max_size) {
@@ -87,7 +87,14 @@ extern "C" {
         return print_cardvector(&board_ptr()->graveyard[owner], buffer, max_size);
     }
     
+    int action_pass() {
 
+
+        Action action = {.action_type = Pass, .target = {0,}, .action_data = NULL};
+        int ans = gs_ptr()->play(action);
+        cout << "after action, phase: " << gs_ptr()->phase << ", priority: " << gs_ptr()->priority << ", player: " << gs_ptr()->player << '\n';
+        return ans;
+    }
 
 }
 

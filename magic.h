@@ -154,6 +154,8 @@ typedef struct Card {
     int basic_counters[4];
     vector<Card*> attached;
 
+    bool tapped;
+
 } Card; 
 
 Card from_card_template(int ctempl_id, CardTemplate * ctempl);
@@ -168,23 +170,75 @@ typedef struct  {
 } SpellOrAbility;
 
 
-typedef struct {
+typedef struct Board {
     vector<Card> battlefield[PLAYER_COUNT];
     vector<Card> graveyard[PLAYER_COUNT];
     vector<Card> exile[PLAYER_COUNT];
     vector<Card> library[PLAYER_COUNT];
     vector<Card> hand[PLAYER_COUNT];
+
+    int max_hand_size[2];
+
     vector<SpellOrAbility> stack;
 
     vector<CardTemplate> cards;
 
+    void draw_random_cards(int player, int amount);
+
 } Board;
 
+enum ActionType {
+    Pass,
+    PlayCard,
+    ActivateAbility,
+    Attack,
+    Block, 
+    Discard
 
-typedef struct {
+};
+
+
+typedef struct Action {
+    ActionType action_type;
+    uint32_t target[2];
+    int* action_data;
+} Action;
+
+
+typedef struct GameState {
     Board board;
     int priority;
-    int phase;
+    TurnPhase phase;
+    int player;
+
+    int action_request;
+
+    int pass_counter;
+
+
+    void untap_step(); 
+    void untap(Card * card);
+    void pass_priority(int player);
+    void upkeep_step();
+    void draw_step(); 
+    void precombat_mainphase();
+    void beginning_of_combat();
+    void declare_attackers();
+    void declare_blocker();
+    void first_strike_damage_step();
+    void damage_step();
+    void end_of_combat();
+    void post_combat_main_phase();
+    void end_step();
+    void cleanup_step();
+
+    bool is_stack_empty();
+
+    void possible_actions(vector<Action> &buffer);
+
+    int play(Action action);
+    void go_to_next_step();
+
 } GameState;
 
 
@@ -197,9 +251,16 @@ CardTemplate new_basic_land(string name, int owner, int color_id);
 Board board_example();
 
 Board * board_ptr();
+GameState * gs_ptr();
 
 
-void draw_random_cards(Board * board, int player, int amount);
+
+void init_gamestate();
+
+
+
+
+
 
 
 

@@ -55,7 +55,7 @@
       <enum>QFrame::Box</enum>
      </property>
      <property name="frameShadow">
-      <enum>QFrame::Raised</enum>
+      <enum>QFrame::Plain</enum>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_2">
       <property name="leftMargin">
@@ -89,8 +89,8 @@
           <rect>
            <x>0</x>
            <y>0</y>
-           <width>107</width>
-           <height>98</height>
+           <width>109</width>
+           <height>100</height>
           </rect>
          </property>
          <property name="autoFillBackground">

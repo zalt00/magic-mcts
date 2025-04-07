@@ -242,6 +242,9 @@ Board board_example() {
     Board board = {};
     board.cards = cards;
 
+    board.max_hand_size[0] = 7;
+    board.max_hand_size[1] = 7;
+
     for (int i=0; i < 20; ++i) {
         card = from_card_template(0, &cards[0]);
         board.library[0].push_back(card);
@@ -271,36 +274,310 @@ Board board_example() {
     card = from_card_template(5, &cards[5]);
     board.battlefield[1].push_back(card);
     
-    draw_random_cards(&board, 0, 5);
-    draw_random_cards(&board, 1, 7);
+    board.draw_random_cards(0, 5);
+    board.draw_random_cards(1, 7);
 
 
     return board;
 }
 
-Board _board;
+GameState gs;
+
 Board * board_ptr() {
-    return &_board;
+    return &gs.board;
+}
+
+GameState *gs_ptr()
+{
+    return &gs;
 }
 
 mt19937 prng (12);
 
 
 
-void draw_random_cards(Board * board, int player, int amount)
+void Board::draw_random_cards(int player, int amount)
 { 
-    uint32_t lib_size = board->library[player].size();
-    Card * data = board->library[player].data();
+    uint32_t lib_size = library[player].size();
+    Card * data = library[player].data();
     for (int i = 0; i < amount; ++i) {
 
         uint32_t card_id = prng() % lib_size;
         Card card = data[card_id];
         data[card_id] = data[lib_size - 1];
-        board->library[player].pop_back();
+        library[player].pop_back();
 
-        board->hand[player].push_back(card);
+        hand[player].push_back(card);
+    }
+}
+
+void init_gamestate()
+{
+    gs.phase = UntapStep;
+    gs.player = 0;
+    gs.priority = -1;
+    gs.board = board_example();
+}
+
+void GameState::untap_step()
+{
+    phase = UntapStep;
+    uint32_t b_size = board.battlefield[player].size();
+    Card * data = board.battlefield[player].data();
+
+    for (int i = 0; i < b_size; ++i) {
+        untap(data + i);
+    }
+
+    upkeep_step();
+}
+
+void GameState::untap(Card *card)
+{
+    card->tapped = false;
+}
+
+void GameState::pass_priority(int player)
+{
+    if (pass_counter >= 2) {
+        pass_counter = 0;
+        priority = -1;
+    } else {
+        priority = player;
+        action_request = priority;
+    }
+}
+
+void GameState::upkeep_step()
+{
+    phase = UpkeepStep;
+    pass_priority(player);
+    
+}
+
+void GameState::draw_step()
+{
+    phase = DrawStep;
+    board.draw_random_cards(player, 1);
+
+    pass_priority(player);
+
+}
+
+void GameState::precombat_mainphase()
+{
+    phase = PrecombatMainPhase;
+    pass_priority(player);
+}
+
+void GameState::beginning_of_combat()
+{
+    phase = BeginningOfCombat;
+    pass_priority(player);
+}
+
+void GameState::declare_attackers()
+{
+    phase = DeclareAttackers;
+    action_request = player;
+}
+
+void GameState::declare_blocker()
+{
+    phase = DeclareBlockers;
+    action_request = 1 - player;
+}
+
+void GameState::first_strike_damage_step()
+{
+    phase = FirstStrikeDamageStep;
+    // resoudre les degats
+    pass_priority(player);
+}
+
+void GameState::damage_step()
+{
+    phase = DamageStep;
+    // resoudre les degats
+    pass_priority(player);
+}
+
+void GameState::end_of_combat()
+{
+    phase = EndOfCombat;
+    pass_priority(player);
+}
+
+void GameState::post_combat_main_phase()
+{
+    phase = PostcombatMainPhase;
+    pass_priority(player);
+}
+
+void GameState::end_step()
+{
+    phase = EndStep;
+    pass_priority(player);
+}
+
+void GameState::cleanup_step()
+{
+    phase = CleanupStep;
+    action_request = player; // que si on doit discard, 
+    // sinon terminer le tour
+
+}
+
+bool GameState::is_stack_empty()
+{
+    return board.stack.empty();
+}
+
+void GameState::possible_actions(vector<Action> &buffer)
+{   
+
+
+    bool is_passing_possible = true;
+
+
+    if (priority == -1) {
+        switch (phase)
+        {
+        case DeclareAttackers:
+            assert(action_request == player);
+            int creature_count = board.battlefield[player].size();
+            assert(creature_count < 10); // pour le moment
+            for (int i = 0; i < (1 << creature_count); ++i) {
+                Action action = {.action_type = Attack, .target = {i, 0}, .action_data = nullptr};
+                buffer.push_back(action);
+            }
+            break;
+        case DeclareBlockers:
+            assert(action_request == 1 - player);
+
+            int creature_count = board.battlefield[1-player].size();
+            assert(creature_count < 10); // pour le moment
+            for (int i = 0; i < (1 << creature_count); ++i) {
+                Action action = {.action_type = Block, .target = {i, 0}, .action_data = nullptr};
+                buffer.push_back(action);
+            }
+            break;
+        default:
+            break;
+        }
+    } else if (priority == player && 
+        (phase == PrecombatMainPhase || phase == PostcombatMainPhase) && is_stack_empty()) {
+            assert(action_request == player);
+            int hand_size = board.hand[player].size();
+            Card * data = board.hand[player].data();
+            for (int i = 0; i < hand_size; ++i) {
+                Action action = {.action_type = PlayCard, .target = {i, 0}, .action_data = nullptr};
+                buffer.push_back(action); // pour le moment, on ne verifie pas les cout
+                // ou la limite du nombre de terrains par tours; tous les sorts coutent 0 mana
+            }
+
+    } else {
+        assert(action_request == priority);
+        int hand_size = board.hand[priority].size();
+        Card * data = board.hand[priority].data();
+        for (int i = 0; i < hand_size; ++i) {
+            int ctempl_id = data[i].ctempl_id;
+            CardTemplate * ctempl = board.cards.data() + i;
+            if (ctempl->kw & FLASH || ctempl->type & INSTANT) {
+                Action action = {.action_type = PlayCard, .target = {i, 0}, .action_data = nullptr};
+                buffer.push_back(action);
+            }
+        }
     }
 
 
+    if (is_passing_possible) {
+        Action pass = {.action_type = Pass, .target = {0, 0}, .action_data = NULL};
+        buffer.push_back(pass);    
+    }
 
+}
+
+int GameState::play(Action action)
+{
+    action_request = -1;
+
+    // faire les actions de jeu, et vérifier la validité du coup
+
+    if (priority != -1) {
+        
+        
+        if (action.action_type == Pass) { // si l'action est "Pass"
+            ++pass_counter;
+            pass_priority(1 - priority);
+        } else if (action.action_type == PlayCard 
+                || action.action_type == ActivateAbility) {
+            pass_counter = 0;
+            pass_priority(priority);
+
+        }
+    }
+    
+
+    if (priority == -1) {
+        if (is_stack_empty()) {
+            go_to_next_step();
+        } else {
+            board.stack.pop_back();
+            pass_priority(player);
+        }
+    }
+    return action_request;
+}
+
+void GameState::go_to_next_step()
+{
+    pass_counter = 0;
+    switch (phase)
+    {
+    case UntapStep:
+        upkeep_step();
+        break;
+    case UpkeepStep:
+        draw_step();
+        break;
+    case DrawStep:
+        precombat_mainphase();
+        break;
+    case PrecombatMainPhase:
+        beginning_of_combat();
+        break;
+    case BeginningOfCombat:
+        declare_attackers();
+        break;
+    case DeclareAttackers:
+        declare_blocker();
+        break;
+    case DeclareBlockers:
+        first_strike_damage_step();
+        break;
+    case FirstStrikeDamageStep:
+        damage_step();
+        break;
+    case DamageStep:
+        end_of_combat();
+        break;
+    case EndOfCombat:
+        post_combat_main_phase();
+        break;    
+    case PostcombatMainPhase:
+        end_step();
+        break;
+
+    case EndStep:
+        cleanup_step();
+        break;
+    case CleanupStep:
+        player = 1 - player;
+        untap_step();
+        break;
+
+    default:
+        break;
+    }
 }
